@@ -84,6 +84,8 @@ useEffect(() => {
 
     if (loginAttempts >= 2) {
       setShowModal(false)
+      setShowCanjear(true);
+
       return
     }
 
@@ -108,6 +110,37 @@ useEffect(() => {
     }
   }
 
+  const handleRedeem = async (premioId) => {
+    // 1. Validar contraseña admin
+    const { data: adminData, error: adminError } = await supabase
+      .from('usuarios_admin')
+      .select('*')
+      .eq('password', adminPassword)
+      .single();
+  
+    if (adminError || !adminData) {
+      alert("Contraseña incorrecta. No se puede marcar como reclamado.");
+      return;
+    }
+  
+    // 2. Marcar premio como reclamado
+    const { error } = await supabase
+      .from('premios')
+      .update({ reclamado: true })
+      .eq('id', premioId);
+  
+    if (error) {
+      alert("Error al marcar como reclamado.");
+    } else {
+      alert("Premio marcado como reclamado.");
+      // Actualiza los datos localmente
+      fetchPremios();
+    }
+  };
+  
+  const [showCanjear, setShowCanjear] = useState(false);
+
+  
   const handleAddClientAfterLogin = async () => {
     if (!isLoggedIn) return
 
@@ -155,6 +188,7 @@ useEffect(() => {
 }, []);
 
 
+
 const handleCheckboxChange = async (index) => {
   const premio = premios[index];
 
@@ -194,17 +228,46 @@ const handleCheckboxChange = async (index) => {
     setCurrentPremioIndex((prevIndex) => (prevIndex === premios.length - 1 ? 0 : prevIndex + 1))
   }
  
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleClearSearch = () => {
+    setSearchQuery('');  // Limpiar el texto del input
+    handleSearch('');    // Volver a cargar todos los clientes
+    
+  };
+
+
+  const handleSearch = async (query) => {
+    if (!query) {
+      // Si el campo de búsqueda está vacío, no hacemos nada
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('*')
+      .or(`nombre.ilike.%${query}%,codigo.ilike.%${query}%`);
+
+    if (error) {
+      console.error('Error buscando clientes:', error);
+      return;
+    }
+
+    setClientes(data);  // Actualizamos la lista de clientes con el resultado de la búsqueda
+  };
   
   return (
     <div className="min-h-screen bg-gray-100 p-4">
+      
       {/* Menú superior fijo */}
       <div className="fixed top-4 left-4 z-50">
-        <button
-          onClick={toggleMenu}
-          className="bg-blue-600 text-white p-2 rounded-lg shadow-lg"
-        >
-          ☰
-        </button>
+      <button
+  onClick={toggleMenu}
+  className="bg-blue-600 text-white w-14 py-2 rounded-lg shadow-lg text-center"
+>
+  ☰
+</button>
+
         {showMenu && (
           <div className="mt-2 bg-white shadow-lg rounded-lg p-2 space-y-2 w-48">
           <button
@@ -219,18 +282,36 @@ const handleCheckboxChange = async (index) => {
 
 
 
-<button 
-  className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-blue-600"
-  onClick={() => setShowRedeemModal(true)}
->
-  Canjear premios
-</button>
-
-
-
-
           </div>
         )}
+      </div>
+      <h2 className="text-2xl font-semibold mb-4 text-center text-blue-600 fixed top-0 left-0 right-0 bg-white py-2 shadow-md z-10">
+  Lista de Clientes
+</h2>
+
+       {/* Contenedor para la búsqueda */}
+      <div className="mt-16">  {/* Aseguramos que haya espacio para el título */}
+        <div className="relative">
+          <input
+            type="text"
+            className="border p-2 rounded-lg mb-4 w-full pr-10"  // Ajuste para espacio para el botón de limpiar
+            placeholder="Buscar por código o nombre"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              handleSearch(e.target.value);
+            }}
+          />
+          {/* Botón de limpiar */}
+          {searchQuery && (
+            <button
+              onClick={handleClearSearch}
+              className="absolute right-2 top-2 text-gray-500"
+            >
+              ✖️
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Botón de Ver Premios en la parte inferior */}
@@ -243,6 +324,45 @@ const handleCheckboxChange = async (index) => {
         </button>
       </div>
 
+
+
+      {showRedeemModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <h2 className="text-xl font-semibold mb-4 text-center text-blue-700">Canjear Premios</h2>
+
+      {premios.length > 0 ? (
+        <ul className="space-y-4">
+          {premios.map((premio, index) => (
+            <li key={premio.id} className="flex items-center justify-between p-2 border rounded">
+              <div>
+                <p className="font-semibold text-blue-600">{premio.nombre}</p>
+                <p className="text-sm text-gray-600">Puntos: {premio.puntos}</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={premio.reclamado}
+                onChange={() => handleCheckboxChange(index)}
+                className="w-5 h-5"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-center text-gray-500">Cargando premios...</p>
+      )}
+
+      <div className="flex justify-center mt-6">
+        <button
+          onClick={() => setShowRedeemModal(false)}
+          className="bg-red-600 text-white px-4 py-2 rounded"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
 
  {/* Modal de mostrar de premios mmmmmmmm */}
@@ -291,43 +411,6 @@ const handleCheckboxChange = async (index) => {
   </div>
 )}
 
-{showRedeemModal && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-      <h2 className="text-xl font-semibold mb-4 text-center text-blue-700">Canjear Premios</h2>
-
-      {premios.length > 0 ? (
-        <ul className="space-y-4">
-          {premios.map((premio, index) => (
-            <li key={premio.id} className="flex items-center justify-between p-2 border rounded">
-              <div>
-                <p className="font-semibold text-blue-600">{premio.nombre}</p>
-                <p className="text-sm text-gray-600">Puntos: {premio.puntos}</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={premio.reclamado}
-                onChange={() => handleCheckboxChange(index)}
-                className="w-5 h-5"
-              />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-center text-gray-500">Cargando premios...</p>
-      )}
-
-      <div className="flex justify-center mt-6">
-        <button
-          onClick={() => setShowRedeemModal(false)}
-          className="bg-red-600 text-white px-4 py-2 rounded"
-        >
-          Cerrar
-        </button>
-      </div>
-    </div>
-  </div>
-)}
 
       {/* Modal de Login */}
       {showModal && (
