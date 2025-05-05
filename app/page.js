@@ -20,23 +20,44 @@ export default function Page() {
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [loginAttempts, setLoginAttempts] = useState(0)
-  const [premios, setPremios] = useState([]) // Lista de premios
-  const [showPremiosModal, setShowPremiosModal] = useState(false) // Control de visibilidad del modal de premios
-  const [currentPremioIndex, setCurrentPremioIndex] = useState(0) // Control del índice del premio actual
 
-  useEffect(() => {
-    fetchClientes()
-    fetchPremios() // Cargar premios
-  }, [])
+  const [premios, setPremios] = useState([]);
+const [currentPremioIndex, setCurrentPremioIndex] = useState(0);
+const [showPremiosModal, setShowPremiosModal] = useState(false);
 
-  const fetchClientes = async () => {
-    const { data, error } = await supabase.from('clientes').select('*')
-    if (error) {
-      console.error('Error fetching clientes:', error)
-    } else {
-      setClientes(data)
-    }
+
+const fetchClientes = async () => {
+  const { data, error } = await supabase.from('clientes').select('*');
+  if (error) {
+    console.error('Error fetching clientes:', error);
+  } else {
+    setClientes(data);
   }
+};
+
+const fetchPremios = async () => {
+  const { data, error } = await supabase
+    .from('premios')
+    .select('id, nombre, puntos, imagen, reclamado')
+
+  if (error) {
+    console.error('Error al obtener premios:', error);
+  } else {
+    setPremios(data);
+    setCurrentPremioIndex(0);
+  }
+};
+
+useEffect(() => {
+  fetchClientes();
+}, []);
+
+useEffect(() => {
+  if (showPremiosModal) {
+    fetchPremios();
+  }
+}, [showPremiosModal]);
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -133,29 +154,33 @@ useEffect(() => {
   }
 }, []);
 
-const handleCheckboxChange = (index) => {
-  // Alternar el estado de la bandera
-  setClaimedFlags((prevFlags) => {
-    const newFlags = [...prevFlags];
-    newFlags[index] = !newFlags[index];
-    localStorage.setItem("claimedFlags", JSON.stringify(newFlags)); // Guardar el nuevo estado en localStorage
-    return newFlags;
-  });
+
+const handleCheckboxChange = async (index) => {
+  const premio = premios[index];
+
+  // Alternar el valor de "reclamado"
+  const nuevoEstado = !premio.reclamado;
+
+  // Actualizar en la base de datos
+  const { error } = await supabase
+    .from('premios')
+    .update({ reclamado: nuevoEstado })
+    .eq('id', premio.id); // Asegúrate de que cada premio tiene un campo "id" único
+
+  if (error) {
+    console.error('Error actualizando premio:', error);
+    return;
+  }
+
+  // Actualizar el estado local
+  const nuevosPremios = [...premios];
+  nuevosPremios[index].reclamado = nuevoEstado;
+  setPremios(nuevosPremios);
 };
 
 
 
-  const fetchPremios = async () => {
-    const premioData = [
-      { nombre: 'Taza', puntos: 300, imagen: 'https://res.cloudinary.com/dlll6ncvv/image/upload/v1746280347/premio1_scpcjj.webp' },
-      { nombre: 'Juego de 6 Vasos', puntos: 600, imagen: 'https://res.cloudinary.com/dlll6ncvv/image/upload/v1746281979/premio2_qflsmp.jpg' },
-      { nombre: 'Alcuza', puntos: 1200, imagen: 'https://res.cloudinary.com/dlll6ncvv/image/upload/v1746281987/premio3_xgxldz.webp' },
-      { nombre: 'Termo', puntos: 2500, imagen: 'https://res.cloudinary.com/dlll6ncvv/image/upload/v1746281997/premio4_gzfyon.jpg' },
-      { nombre: 'Caldera Electrica', puntos: 2500, imagen: 'https://res.cloudinary.com/dlll6ncvv/image/upload/v1746282050/premio5_xcgqay.png' },
-      { nombre: 'Set de Utensilios de Cocina', puntos: 2500, imagen: 'https://res.cloudinary.com/dlll6ncvv/image/upload/v1746282012/premio6_nvs07o.webp' },
-    ]
-    setPremios(premioData)
-  }
+
 
   const toggleMenu = () => {
     setShowMenu(prev => !prev)
@@ -219,84 +244,41 @@ const handleCheckboxChange = (index) => {
       </div>
 
 
-     
 
- {/* Modal de canje de premios mmmmmmmm */}
+ {/* Modal de mostrar de premios mmmmmmmm */}
 
-      {/* Modal de canje de premios */}
-      {showRedeemModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl w-[90%] max-w-md shadow-lg">
-            <h2 className="text-xl font-bold mb-4 text-center">Canjear Premios</h2>
-            {premios.map((premio, index) => (
-              <div key={index} className="flex justify-between items-center mb-2">
-                <span>{premio.nombre}</span>
-                <input 
-                  type="checkbox" 
-                  checked={!!claimedFlags[index]}  // Asegurarse de que siempre sea un valor booleano
-                  onChange={() => handleCheckboxChange(index)} 
-                />
-
-             
-              </div>
-            ))}
-            <div className="flex justify-end gap-4 mt-4">
-              <button 
-                onClick={() => setShowRedeemModal(false)}
-                className="bg-gray-300 px-4 py-2 rounded"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => setShowRedeemModal(false)}
-                className="bg-green-600 text-white px-4 py-2 rounded"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-{/* Modal de Premios */}
 {showPremiosModal && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white p-6 rounded-lg w-full max-w-md">
       <h2 className="text-xl font-semibold mb-4 text-center text-blue-700">Premios Disponibles</h2>
-      <div className="relative text-center">
-        <h3 className="text-lg font-semibold text-blue-600">{premios[currentPremioIndex].nombre}</h3>
-        <p className="text-blue-500 mb-4">Puntos: {premios[currentPremioIndex].puntos}</p>
 
-        <div className="relative">
-          <img
-            src={premios[currentPremioIndex].imagen}
-            alt={`Premio ${currentPremioIndex + 1}`}
-            className="w-full h-48 object-contain rounded-lg mb-4 mx-auto"
-          />
-          {/* Si el premio ha sido reclamado, mostrar la marca de agua */}
-          {claimedFlags[currentPremioIndex] && (
-            <div className="absolute top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center text-white font-bold text-xl">
-              Reclamado
-            </div>
-          )}
-        </div>
+      {premios.length > 0 ? (
+        <div className="relative text-center">
+          <h3 className="text-lg font-semibold text-blue-600">{premios[currentPremioIndex].nombre}</h3>
+          <p className="text-blue-500 mb-4">Puntos: {premios[currentPremioIndex].puntos}</p>
 
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={handlePreviousPremio}
-            className="bg-gray-600 text-white p-2 rounded-full"
-          >
-            ←
-          </button>
-          <button
-            onClick={handleNextPremio}
-            className="bg-gray-600 text-white p-2 rounded-full"
-          >
-            →
-          </button>
+          <div className="relative">
+            <img
+              src={premios[currentPremioIndex].imagen}
+              alt={`Premio ${currentPremioIndex + 1}`}
+              className="w-full h-48 object-contain rounded-lg mb-4 mx-auto"
+            />
+            {premios[currentPremioIndex].reclamado && (
+              <div className="absolute top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center text-white font-bold text-xl">
+                Reclamado
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-center space-x-4">
+            <button onClick={handlePreviousPremio} className="bg-gray-600 text-white p-2 rounded-full">←</button>
+            <button onClick={handleNextPremio} className="bg-gray-600 text-white p-2 rounded-full">→</button>
+          </div>
         </div>
-      </div>
-      {/* Botón de Cerrar */}
+      ) : (
+        <p className="text-center text-gray-500">Cargando premios...</p>
+      )}
+
       <div className="flex justify-center mt-4">
         <button
           onClick={() => setShowPremiosModal(false)}
@@ -309,7 +291,43 @@ const handleCheckboxChange = (index) => {
   </div>
 )}
 
+{showRedeemModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <h2 className="text-xl font-semibold mb-4 text-center text-blue-700">Canjear Premios</h2>
 
+      {premios.length > 0 ? (
+        <ul className="space-y-4">
+          {premios.map((premio, index) => (
+            <li key={premio.id} className="flex items-center justify-between p-2 border rounded">
+              <div>
+                <p className="font-semibold text-blue-600">{premio.nombre}</p>
+                <p className="text-sm text-gray-600">Puntos: {premio.puntos}</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={premio.reclamado}
+                onChange={() => handleCheckboxChange(index)}
+                className="w-5 h-5"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-center text-gray-500">Cargando premios...</p>
+      )}
+
+      <div className="flex justify-center mt-6">
+        <button
+          onClick={() => setShowRedeemModal(false)}
+          className="bg-red-600 text-white px-4 py-2 rounded"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Modal de Login */}
       {showModal && (
